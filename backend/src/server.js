@@ -3,7 +3,6 @@ const http = require('http');
 const app = require('./app');
 const socketIO = require('socket.io');
 const { sequelize } = require('./models');
-const SocketService = require('./services/socketService');
 
 // Create HTTP server
 const server = http.createServer(app);
@@ -17,13 +16,27 @@ const io = socketIO(server, {
   }
 });
 
-// Initialize Socket service
-const socketService = new SocketService(io);
-socketService.initialize();
-
-// Make io and socketService available to the app
-app.set('io', io);
-app.set('socketService', socketService);
+// Socket.io connection handler
+io.on('connection', (socket) => {
+  console.log('A client connected');
+  
+  // Join a room based on user role
+  socket.on('join', (room) => {
+    socket.join(room);
+    console.log(`Client joined room: ${room}`);
+  });
+  
+  // Handle order updates
+  socket.on('orderUpdate', (data) => {
+    io.to('admin').emit('orderUpdate', data);
+    io.to(`user_${data.userId}`).emit('orderUpdate', data);
+  });
+  
+  // Handle disconnections
+  socket.on('disconnect', () => {
+    console.log('A client disconnected');
+  });
+});
 
 // Set port
 const PORT = process.env.PORT || 4000;

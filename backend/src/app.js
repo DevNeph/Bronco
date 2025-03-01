@@ -2,13 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
-const swaggerUi = require('swagger-ui-express');
-const YAML = require('yamljs');
-const path = require('path');
 const { errorHandler } = require('./middleware/errorHandler');
-
-// Load Swagger document
-const swaggerDocument = YAML.load(path.join(__dirname, '../swagger.yaml'));
 
 // Route imports
 const authRoutes = require('./routes/authRoutes');
@@ -31,9 +25,6 @@ app.use(cors({
 app.use(morgan('dev')); // Logging
 app.use(express.json()); // Parse JSON bodies
 app.use(express.urlencoded({ extended: true })); // Parse URL-encoded bodies
-
-// API Documentation
-app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
 // API Routes
 app.use('/api/v1/auth', authRoutes);

@@ -12,34 +12,15 @@ const LoadingScreen = () => {
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        // AsyncStorage'dan token'ı oku
         const token = await AsyncStorage.getItem('userToken');
-
-        // Eğer token varsa, doğrulama için API çağrısı yapılabilir
         if (token) {
-          // Örneğin: API'ye token doğrulama isteği gönderin
-          // const response = await fetch('https://yourapi.com/verifyToken', {
-          //   method: 'GET',
-          //   headers: {
-          //     'Authorization': `Bearer ${token}`,
-          //   },
-          // });
-          // const result = await response.json();
-          // if (response.ok && result.valid) {
-          //   navigation.replace('AdminDashboard');
-          // } else {
-          //   navigation.replace('Auth');
-          // }
-
-          // Şimdilik token varsa doğrudan AdminDashboard'e yönlendiriyoruz
-          navigation.replace('AdminDashboard');
+          // API doğrulama yapabilirsiniz veya token varsa
+          navigation.replace('Main'); // MainNavigator'a yönlendiriyoruz
         } else {
-          // Token yoksa, giriş ekranına yönlendir
-          navigation.replace('Auth');
+          navigation.replace('Auth'); // Giriş ekranına yönlendiriyoruz
         }
       } catch (error) {
         console.error('Authentication check error:', error);
-        // Hata durumunda da giriş ekranına yönlendir
         navigation.replace('Auth');
       }
     };
