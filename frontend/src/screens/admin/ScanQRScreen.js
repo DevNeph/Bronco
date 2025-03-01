@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, Alert } from 'react-native';
 import { Text, Button, TextInput, Card, Title, ActivityIndicator } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BarCodeScanner } from 'expo-barcode-scanner';
+import { Camera } from 'expo-camera';  // Güncellendi
 import { colors } from '../../utils/theme';
 
 const ScanQRScreen = ({ navigation }) => {
@@ -15,7 +15,8 @@ const ScanQRScreen = ({ navigation }) => {
 
   useEffect(() => {
     (async () => {
-      const { status } = await BarCodeScanner.requestPermissionsAsync();
+      // Kamera izin isteği güncellendi
+      const { status } = await Camera.requestCameraPermissionsAsync();
       setHasPermission(status === 'granted');
     })();
   }, []);
@@ -106,7 +107,7 @@ const ScanQRScreen = ({ navigation }) => {
     <SafeAreaView style={styles.container}>
       {!scanned ? (
         <View style={styles.scannerContainer}>
-          <BarCodeScanner
+          <Camera
             onBarCodeScanned={scanned ? undefined : handleBarCodeScanned}
             style={styles.scanner}
           />
