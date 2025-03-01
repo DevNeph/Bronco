@@ -1,5 +1,5 @@
 const jwt = require('jsonwebtoken');
-const { User, Loyalty, sequelize } = require('../models');
+const { User, Loyalty } = require('../models');
 const { ApiError } = require('../middleware/errorHandler');
 
 /**
