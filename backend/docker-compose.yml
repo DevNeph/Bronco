@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:13-alpine
+    container_name: bronco-postgres
+    environment:
+      POSTGRES_DB: bronco
+      POSTGRES_USER: broncoadmin
+      POSTGRES_PASSWORD: password123
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - bronco-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U broncoadmin -d bronco"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # Backend API
+  backend:
+    build: ./backend
+    container_name: bronco-backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: bronco
+      DB_USER: broncoadmin
+      DB_PASSWORD: password123
+      PORT: 4000
+      JWT_SECRET: dev_secret_key_change_in_production
+      JWT_EXPIRES_IN: 1h
+      JWT_REFRESH_EXPIRES_IN: 7d
+      CORS_ORIGIN: http://localhost:3000,http://localhost:8081,http://localhost:19006
+    ports:
+      - "4000:4000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    networks:
+      - bronco-network
+    command: npm run dev
+
+  # React Native Mobile App (Development)
+  # Uncomment when frontend is ready
+  # mobile:
+  #   build:
+  #     context: ./frontend
+  #     dockerfile: Dockerfile.dev
+  #   container_name: bronco-mobile
+  #   environment:
+  #     API_URL: http://backend:4000/api/v1
+  #   ports:
+  #     - "19000:19000"
+  #     - "19001:19001"
+  #     - "19006:19006"
+  #   volumes:
+  #     - ./frontend:/app
+  #     - /app/node_modules
+  #   networks:
+  #     - bronco-network
+  #   depends_on:
+  #     - backend
+
+  # Web Admin Panel
+  # Uncomment when admin panel is ready
+  # admin:
+  #   build:
+  #     context: ./admin-panel
+  #     dockerfile: Dockerfile.dev
+  #   container_name: bronco-admin
+  #   environment:
+  #     REACT_APP_API_URL: http://backend:4000/api/v1
+  #   ports:
+  #     - "3000:3000"
+  #   volumes:
+  #     - ./admin-panel:/app
+  #     - /app/node_modules
+  #   networks:
+  #     - bronco-network
+  #   depends_on:
+  #     - backend
+
+volumes:
+  postgres-data:
+
+networks:
+  bronco-network:
+    driver: bridge
