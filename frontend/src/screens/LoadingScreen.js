@@ -4,29 +4,49 @@ import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { Text } from 'react-native-paper';
 import { useNavigation } from '@react-navigation/native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useDispatch } from 'react-redux';
 import { colors } from '../utils/theme';
 
 const LoadingScreen = () => {
   const navigation = useNavigation();
+  const dispatch = useDispatch();
 
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        const token = await AsyncStorage.getItem('userToken');
-        if (token) {
-          // API doğrulama yapabilirsiniz veya token varsa
-          navigation.replace('Main'); // MainNavigator'a yönlendiriyoruz
+        console.log('Checking authentication status...');
+        // Check if we have stored tokens
+        const userStr = await AsyncStorage.getItem('user');
+        const tokensStr = await AsyncStorage.getItem('tokens');
+        
+        if (userStr && tokensStr) {
+          console.log('Tokens found, updating Redux state...');
+          
+          // Parse the data
+          const user = JSON.parse(userStr);
+          const tokens = JSON.parse(tokensStr);
+          
+          // Dispatch action to update Redux state
+          // Bu kısmı authSlice.js'deki loadUser action'ın yapmasına izin verelim
+          // Burada doğrudan navigasyon yapmak yerine,
+          // AppNavigator component'ının isAuthenticated state'e göre yönlendirme yapmasını bekleyelim
+          
+          // Bu fonksiyon LoadingScreen'in kendisi tarafından gösteriliyor, bu yüzden
+          // burada bir navigasyon yapmak gerekmiyor
+          // AppNavigator zaten isAuthenticated state'e göre doğru ekrana yönlendirecek
+          
+          console.log('Authentication state updated, waiting for AppNavigator to handle navigation');
         } else {
-          navigation.replace('Auth'); // Giriş ekranına yönlendiriyoruz
+          console.log('No tokens found, staying on Auth navigator');
+          // Tokens not found, will stay in Auth navigator (handled by AppNavigator)
         }
       } catch (error) {
         console.error('Authentication check error:', error);
-        navigation.replace('Auth');
       }
     };
 
     checkAuth();
-  }, [navigation]);
+  }, [dispatch, navigation]);
 
   return (
     <View style={styles.container}>

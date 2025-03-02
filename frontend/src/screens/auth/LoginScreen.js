@@ -1,13 +1,14 @@
 // src/screens/auth/LoginScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, StyleSheet, TouchableOpacity, ScrollView, Alert, Platform } from 'react-native';
 import { Text, TextInput, Button, HelperText } from 'react-native-paper';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
 import { useDispatch, useSelector } from 'react-redux';
-import { login, clearError } from '../../store/slices/authSlice';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import AuthService from '../../services/authService';
 import { colors } from '../../utils/theme';
 
 const validationSchema = Yup.object().shape({
@@ -21,14 +22,14 @@ const validationSchema = Yup.object().shape({
 
 const LoginScreen = ({ navigation }) => {
   const [secureTextEntry, setSecureTextEntry] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState(null);
   const dispatch = useDispatch();
-  const { isLoading, error } = useSelector((state) => state.auth);
 
+  // Debug info for platform
   useEffect(() => {
-    return () => {
-      dispatch(clearError());
-    };
-  }, [dispatch]);
+    console.log(`Running on platform: ${Platform.OS}`);
+  }, []);
 
   const formik = useFormik({
     initialValues: {
@@ -36,8 +37,52 @@ const LoginScreen = ({ navigation }) => {
       password: '',
     },
     validationSchema,
-    onSubmit: (values) => {
-      dispatch(login(values));
+    onSubmit: async (values) => {
+      try {
+        console.log('Login form submitted:', values.email);
+        setIsLoading(true);
+        setError(null);
+        
+        // Directly use AuthService to avoid Redux complexity
+        const response = await AuthService.login(values.email, values.password);
+        console.log('Login API call successful!');
+        
+        // Store user data in AsyncStorage
+        await AsyncStorage.setItem('user', JSON.stringify(response.data.data.user));
+        await AsyncStorage.setItem('tokens', JSON.stringify({
+          accessToken: response.data.data.accessToken,
+          refreshToken: response.data.data.refreshToken,
+        }));
+        
+        console.log('User data and tokens saved to AsyncStorage');
+        
+        // Şimdi Redux state'i güncelleyelim
+        // Alternatif olarak Redux yerine burada direct navigation yapıyoruz
+        // Burası çok önemli!
+        
+        // AppNavigator.js dosyanıza göre yönlendirilmesi gereken ekran "Main" değil
+        // Doğrudan parent navigator'ı kullanıyoruz
+        
+        // Root stack üzerinden, ana navigatoru kontrol eden component'a geri dönelim
+        const rootNavigation = navigation.getParent() || navigation;
+        
+        // Burada dispatch yerine doğrudan navigator'a yönlendirme yapıyoruz
+        // NOT: Uygulamanızın ilk açılışında isAuthenticated true olarak ayarlanacak
+        // ve otomatik olarak Main screen'e yönlendirilecektir
+        
+        // Bunu denemeden önce AppNavigator.js'deki kod çalışır
+        rootNavigation.navigate('Main');
+        
+      } catch (err) {
+        console.error('Login error:', err);
+        setError(err.response?.data?.message || 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.');
+        Alert.alert(
+          'Giriş Hatası',
+          err.response?.data?.message || 'Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.'
+        );
+      } finally {
+        setIsLoading(false);
+      }
     },
   });
 

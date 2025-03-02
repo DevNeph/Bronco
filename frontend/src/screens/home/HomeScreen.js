@@ -1,12 +1,15 @@
 // src/screens/home/HomeScreen.js
 import React, { useEffect, useState } from 'react';
-import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView } from 'react-native';
-import { Text, Card, Chip, ActivityIndicator, Searchbar } from 'react-native-paper';
+import { View, StyleSheet, FlatList, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { Text, Card, Chip, ActivityIndicator, Searchbar, Button } from 'react-native-paper';
 import { useDispatch, useSelector } from 'react-redux';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { fetchProducts } from '../../store/slices/productsSlice';
 import { colors } from '../../utils/theme';
+
+// Import our debug helper
+import DebugHelper from '../../components/DebugHelper';
 
 const categories = [
   { id: 'all', name: 'Tümü' },
@@ -23,10 +26,29 @@ const HomeScreen = ({ navigation }) => {
   const { user } = useSelector((state) => state.auth);
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [showDebug, setShowDebug] = useState(false);
+  const [manualFetch, setManualFetch] = useState(false);
 
-  useEffect(() => {
-    dispatch(fetchProducts());
-  }, [dispatch]);
+  // TEMPORARY: Don't automatically fetch data, add a manual button instead
+  // This helps isolate if API fetching is causing the issue
+  // useEffect(() => {
+  //   dispatch(fetchProducts());
+  // }, [dispatch]);
+
+  const handleManualFetch = () => {
+    setManualFetch(true);
+    dispatch(fetchProducts())
+      .unwrap()
+      .then(() => {
+        Alert.alert('Success', 'Products fetched successfully');
+      })
+      .catch((error) => {
+        Alert.alert('Error', `Failed to fetch products: ${error}`);
+      })
+      .finally(() => {
+        setManualFetch(false);
+      });
+  };
 
   const onChangeSearch = (query) => setSearchQuery(query);
 
@@ -85,13 +107,36 @@ const HomeScreen = ({ navigation }) => {
           Merhaba, {user?.firstName || 'Misafir'}!
         </Text>
         
-        <TouchableOpacity
-          style={styles.cartButton}
-          onPress={() => navigation.navigate('Cart')}
-        >
-          <Ionicons name="cart-outline" size={24} color={colors.primary} />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {/* Debug toggle button */}
+          <TouchableOpacity
+            style={styles.debugButton}
+            onPress={() => setShowDebug(!showDebug)}
+          >
+            <Ionicons name="bug-outline" size={24} color={colors.primary} />
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={styles.cartButton}
+            onPress={() => navigation.navigate('Cart')}
+          >
+            <Ionicons name="cart-outline" size={24} color={colors.primary} />
+          </TouchableOpacity>
+        </View>
       </View>
+      
+      {/* Debug helper panel */}
+      {showDebug && <DebugHelper />}
+      
+      {/* Manual fetch button */}
+      <Button 
+        mode="contained"
+        loading={manualFetch}
+        onPress={handleManualFetch}
+        style={styles.manualFetchButton}
+      >
+        Manually Fetch Products
+      </Button>
       
       <Searchbar
         placeholder="Ara..."
@@ -111,15 +156,18 @@ const HomeScreen = ({ navigation }) => {
         />
       </View>
       
-      {isLoading ? (
+      {isLoading && !manualFetch ? (
         <View style={styles.loaderContainer}>
           <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : error ? (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>
-            Ürünler yüklenirken bir hata oluştu. Lütfen tekrar deneyin.
+            Ürünler yüklenirken bir hata oluştu: {error}
           </Text>
+          <Button mode="contained" onPress={handleManualFetch}>
+            Tekrar Dene
+          </Button>
         </View>
       ) : (
         <FlatList
@@ -132,7 +180,9 @@ const HomeScreen = ({ navigation }) => {
           ListEmptyComponent={
             <View style={styles.emptyContainer}>
               <Text style={styles.emptyText}>
-                Ürün bulunamadı.
+                {products.length === 0 
+                  ? 'Henüz ürün yok. Ürünleri yüklemek için yukarıdaki butonu kullanın.' 
+                  : 'Arama kriterlerine uygun ürün bulunamadı.'}
               </Text>
             </View>
           }
@@ -159,8 +209,18 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: colors.primary,
   },
+  headerButtons: {
+    flexDirection: 'row',
+  },
+  debugButton: {
+    padding: 8,
+    marginRight: 8,
+  },
   cartButton: {
     padding: 8,
+  },
+  manualFetchButton: {
+    margin: 8,
   },
   searchBar: {
     marginHorizontal: 16,
@@ -230,6 +290,7 @@ const styles = StyleSheet.create({
   errorText: {
     color: colors.error,
     textAlign: 'center',
+    marginBottom: 16,
   },
   emptyContainer: {
     flex: 1,

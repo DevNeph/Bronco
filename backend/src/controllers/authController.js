@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-const { User, Loyalty } = require('../models');
+const { Op } = require('sequelize');  // Op'u direkt sequelize'den import ediyoruz
+const { User, Loyalty, sequelize } = require('../models');
 const { ApiError } = require('../middleware/errorHandler');
 
 /**
@@ -36,7 +37,7 @@ const register = async (req, res, next) => {
     // Check if user already exists
     const existingUser = await User.findOne({
       where: {
-        [sequelize.Op.or]: [{ email }, { phone }]
+        [Op.or]: [{ email }, { phone }]  // sequelize.Op yerine Op kullanıyoruz
       }
     });
     

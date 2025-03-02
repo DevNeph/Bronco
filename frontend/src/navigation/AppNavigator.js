@@ -18,9 +18,11 @@ const AppNavigator = () => {
   const dispatch = useDispatch();
   
   useEffect(() => {
+    // Attempt to load user data on app start
     dispatch(loadUser());
   }, [dispatch]);
   
+  // Show loading screen while authentication is being checked
   if (isLoading) {
     return <LoadingScreen />;
   }
