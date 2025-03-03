@@ -129,3 +129,43 @@ FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 CREATE TRIGGER update_settings_updated_at BEFORE UPDATE ON settings
 FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+CREATE TABLE product_categories (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name VARCHAR(100) NOT NULL,
+  description TEXT,
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+
+-- Mevcut products tablosuna foreign key ekleyin
+ALTER TABLE products ADD COLUMN category_id UUID REFERENCES product_categories(id);
+CREATE INDEX idx_products_category_id ON products(category_id);
+
+CREATE TABLE content (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  title VARCHAR(255) NOT NULL,
+  slug VARCHAR(255) NOT NULL UNIQUE,
+  content TEXT,
+  type VARCHAR(50) NOT NULL, -- 'page', 'blog', 'announcement' gibi
+  status VARCHAR(20) NOT NULL DEFAULT 'draft', -- 'draft', 'published'
+  published_at TIMESTAMP,
+  created_by UUID REFERENCES users(id),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_content_slug ON content(slug);
+CREATE INDEX idx_content_type ON content(type);
+
+CREATE TABLE admin_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id),
+  action VARCHAR(100) NOT NULL,
+  entity_type VARCHAR(50),  -- 'product', 'user', 'order', etc.
+  entity_id UUID,
+  details JSONB,
+  ip_address VARCHAR(50),
+  created_at TIMESTAMP NOT NULL DEFAULT NOW()
+);
+CREATE INDEX idx_admin_logs_user_id ON admin_logs(user_id);
+CREATE INDEX idx_admin_logs_created_at ON admin_logs(created_at);
