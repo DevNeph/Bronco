@@ -5,8 +5,6 @@ import './index.css';
 import App from './App';
 import { AuthProvider } from './hooks/useAuth';
 
-// Tailwind CSS stillerini içe aktar
-import './styles/tailwind.css';
 
 const root = ReactDOM.createRoot(document.getElementById('root'));
 root.render(
