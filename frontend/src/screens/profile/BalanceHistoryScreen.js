@@ -17,12 +17,14 @@ const BalanceHistoryScreen = () => {
   }, []);
   
   const loadTransactions = (page = 1) => {
-    dispatch(fetchBalanceHistory({ page, limit: 10 }));
+    return dispatch(fetchBalanceHistory({ page, limit: 10 })).unwrap();
   };
   
   const handleRefresh = () => {
     setRefreshing(true);
-    loadTransactions().finally(() => setRefreshing(false));
+    loadTransactions()
+      .then(() => setRefreshing(false))
+      .catch(() => setRefreshing(false));
   };
   
   const handleLoadMore = () => {

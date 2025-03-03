@@ -93,13 +93,34 @@ const getUserById = async (req, res, next) => {
       formattedOrderStats[stat.status] = parseInt(stat.dataValues.count);
     });
     
+    // Get recent orders
+    const recentOrders = await Order.findAll({
+      where: { userId: id },
+      include: [{
+        model: OrderItem,
+        include: [Product]
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 5
+    });
+    
+    // Get total amount spent
+    const totalSpent = await Order.sum('total_amount', {
+      where: { 
+        userId: id,
+        status: 'completed'
+      }
+    });
+    
     res.json({
       status: 'success',
       data: {
         user,
         balance: currentBalance,
         loyalty: loyalty || { coffeeCount: 0, freeCoffees: 0, usedCoffees: 0 },
-        orders: formattedOrderStats
+        orders: formattedOrderStats,
+        recentOrders,
+        totalSpent: totalSpent || 0
       }
     });
   } catch (error) {
@@ -410,49 +431,88 @@ const updateSettings = async (req, res, next) => {
 const getDashboardStats = async (req, res, next) => {
   try {
     const { period = 'day' } = req.query;
-    let dateFormat, periodStart;
     
-    // Determine date format and period start based on requested period
-    switch(period) {
-      case 'day':
-        dateFormat = '%Y-%m-%d';
-        periodStart = new Date();
-        periodStart.setDate(periodStart.getDate() - 30); // Last 30 days
-        break;
-      case 'week':
-        dateFormat = '%Y-%U';
-        periodStart = new Date();
-        periodStart.setMonth(periodStart.getMonth() - 3); // Last 3 months
-        break;
-      case 'month':
-        dateFormat = '%Y-%m';
-        periodStart = new Date();
-        periodStart.setFullYear(periodStart.getFullYear() - 1); // Last year
-        break;
-      default:
-        dateFormat = '%Y-%m-%d';
-        periodStart = new Date();
-        periodStart.setDate(periodStart.getDate() - 30); // Default to last 30 days
-    }
+    // Bazı temel tarih aralıkları
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
     
-    // Get sales statistics by period
-    const salesByPeriod = await Order.findAll({
-      attributes: [
-        [sequelize.fn('DATE_FORMAT', sequelize.col('created_at'), dateFormat), 'period'],
-        [sequelize.fn('COUNT', sequelize.col('*')), 'orderCount'],
-        [sequelize.fn('SUM', sequelize.col('total_amount')), 'totalSales']
-      ],
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+    
+    const thisWeekStart = new Date(today);
+    thisWeekStart.setDate(thisWeekStart.getDate() - thisWeekStart.getDay());
+    
+    const lastWeekStart = new Date(thisWeekStart);
+    lastWeekStart.setDate(lastWeekStart.getDate() - 7);
+    
+    const thisMonthStart = new Date(today.getFullYear(), today.getMonth(), 1);
+    
+    const lastMonthStart = new Date(thisMonthStart);
+    lastMonthStart.setMonth(lastMonthStart.getMonth() - 1);
+    
+    // Toplam kullanıcı sayısı ve son 30 günde kaydolanlar
+    const totalUsersCount = await User.count();
+    const newUsersCount = await User.count({
       where: {
-        status: 'completed',
         createdAt: {
-          [Op.gte]: periodStart
+          [Op.gte]: new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000)
         }
-      },
-      group: [sequelize.fn('DATE_FORMAT', sequelize.col('created_at'), dateFormat)],
-      order: [sequelize.fn('DATE_FORMAT', sequelize.col('created_at'), dateFormat)]
+      }
     });
     
-    // Get order counts by status
+    // Günlük, haftalık ve aylık gelirler
+    const todayRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { [Op.gte]: today }
+      }
+    }) || 0;
+    
+    const yesterdayRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { 
+          [Op.gte]: yesterday,
+          [Op.lt]: today
+        }
+      }
+    }) || 0;
+    
+    const thisWeekRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { [Op.gte]: thisWeekStart }
+      }
+    }) || 0;
+    
+    const lastWeekRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { 
+          [Op.gte]: lastWeekStart,
+          [Op.lt]: thisWeekStart
+        }
+      }
+    }) || 0;
+    
+    const thisMonthRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { [Op.gte]: thisMonthStart }
+      }
+    }) || 0;
+    
+    const lastMonthRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed',
+        createdAt: { 
+          [Op.gte]: lastMonthStart,
+          [Op.lt]: thisMonthStart
+        }
+      }
+    }) || 0;
+    
+    // Siparişlerin durum dağılımı
     const ordersByStatus = await Order.findAll({
       attributes: [
         'status',
@@ -461,36 +521,412 @@ const getDashboardStats = async (req, res, next) => {
       group: ['status']
     });
     
-    // Get popular products
-    const popularProducts = await OrderItem.findAll({
+    // Aktif siparişler (tamamlanmamış veya iptal edilmemiş)
+    const activeOrdersCount = await Order.count({
+      where: {
+        status: {
+          [Op.notIn]: ['completed', 'cancelled']
+        }
+      }
+    });
+    
+    // Bu haftanın günlük siparişleri
+    const dailyOrdersThisWeek = await Order.findAll({
+      attributes: [
+        [sequelize.fn('DATE', sequelize.col('created_at')), 'date'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'orderCount'],
+        [sequelize.fn('SUM', sequelize.col('total_amount')), 'totalAmount']
+      ],
+      where: {
+        createdAt: { [Op.gte]: thisWeekStart }
+      },
+      group: [sequelize.fn('DATE', sequelize.col('created_at'))],
+      order: [[sequelize.fn('DATE', sequelize.col('created_at')), 'ASC']]
+    });
+    
+    // En çok satılan 5 ürün
+    const topProducts = await OrderItem.findAll({
       attributes: [
         'productId',
-        [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQuantity']
+        [sequelize.fn('SUM', sequelize.col('quantity')), 'totalQuantity'],
+        [sequelize.fn('COUNT', sequelize.col('order_id')), 'orderCount']
       ],
       include: [{
         model: Product,
-        attributes: ['name', 'category']
+        attributes: ['name', 'category', 'price', 'imageUrl']
       }],
       group: ['productId', 'Product.id'],
       order: [[sequelize.fn('SUM', sequelize.col('quantity')), 'DESC']],
-      limit: 10
+      limit: 5
     });
     
-    // Get user statistics
-    const userStats = await User.findAll({
+    // Günlük, haftalık ve aylık sipariş sayıları
+    const todayOrdersCount = await Order.count({
+      where: {
+        createdAt: { [Op.gte]: today }
+      }
+    });
+    
+    const yesterdayOrdersCount = await Order.count({
+      where: {
+        createdAt: { 
+          [Op.gte]: yesterday,
+          [Op.lt]: today
+        }
+      }
+    });
+    
+    const thisWeekOrdersCount = await Order.count({
+      where: {
+        createdAt: { [Op.gte]: thisWeekStart }
+      }
+    });
+    
+    const lastWeekOrdersCount = await Order.count({
+      where: {
+        createdAt: { 
+          [Op.gte]: lastWeekStart,
+          [Op.lt]: thisWeekStart
+        }
+      }
+    });
+    
+    // Son 5 sipariş
+    const recentOrders = await Order.findAll({
+      include: [{
+        model: User,
+        attributes: ['firstName', 'lastName']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 5
+    });
+    
+    // Toplam gelir
+    const totalRevenue = await Order.sum('total_amount', {
+      where: {
+        status: 'completed'
+      }
+    }) || 0;
+    
+    // Toplam sipariş sayısı
+    const totalOrdersCount = await Order.count();
+    
+    res.json({
+      status: 'success',
+      data: {
+        users: {
+          total: totalUsersCount,
+          new: newUsersCount
+        },
+        orders: {
+          total: totalOrdersCount,
+          today: todayOrdersCount,
+          yesterday: yesterdayOrdersCount,
+          thisWeek: thisWeekOrdersCount,
+          lastWeek: lastWeekOrdersCount,
+          active: activeOrdersCount
+        },
+        revenue: {
+          total: totalRevenue,
+          today: todayRevenue,
+          yesterday: yesterdayRevenue,
+          thisWeek: thisWeekRevenue,
+          lastWeek: lastWeekRevenue,
+          thisMonth: thisMonthRevenue,
+          lastMonth: lastMonthRevenue
+        },
+        ordersByStatus,
+        dailyOrdersThisWeek,
+        topProducts,
+        recentOrders
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Ürün istatistikleri dahil tüm ürünleri getir
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const getProductsWithStats = async (req, res, next) => {
+  try {
+    const { limit = 50, page = 1, search, category, sortBy = 'sales', sortOrder = 'desc' } = req.query;
+    
+    // Calculate offset
+    const offset = (page - 1) * limit;
+    
+    // Add query conditions if filters are provided
+    const where = {};
+    if (search) {
+      where.name = { [Op.iLike]: `%${search}%` };
+    }
+    if (category) {
+      where.category = category;
+    }
+    
+    // Determine sort column and direction
+    let order = [];
+    if (sortBy === 'sales') {
+      // Default sort by product popularity (requires a subquery)
+      order = [[sequelize.literal('totalSold'), sortOrder === 'asc' ? 'ASC' : 'DESC']];
+    } else if (['name', 'price', 'category', 'createdAt'].includes(sortBy)) {
+      order = [[sortBy, sortOrder === 'asc' ? 'ASC' : 'DESC']];
+    }
+    
+    // Get products with sales stats
+    const products = await Product.findAndCountAll({
+      where,
+      attributes: {
+        include: [
+          [
+            sequelize.literal(`(
+              SELECT COALESCE(COUNT(*), 0)
+              FROM order_items
+              WHERE order_items.product_id = "Product".id
+            )`),
+            'orderCount'
+          ],
+          [
+            sequelize.literal(`(
+              SELECT COALESCE(SUM(quantity), 0)
+              FROM order_items
+              WHERE order_items.product_id = "Product".id
+            )`),
+            'totalSold'
+          ]
+        ]
+      },
+      order,
+      limit: parseInt(limit),
+      offset: parseInt(offset)
+    });
+    
+    // Get product categories for filtering
+    const categories = await Product.findAll({
       attributes: [
-        [sequelize.fn('COUNT', sequelize.col('*')), 'totalUsers'],
-        [sequelize.fn('SUM', sequelize.literal('CASE WHEN created_at >= NOW() - INTERVAL 30 DAY THEN 1 ELSE 0 END')), 'newUsers']
-      ]
+        'category',
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      group: ['category'],
+      order: [['category', 'ASC']]
     });
     
     res.json({
       status: 'success',
       data: {
-        salesByPeriod,
-        ordersByStatus,
-        popularProducts,
-        userStats: userStats[0]
+        products: products.rows,
+        totalCount: products.count,
+        currentPage: parseInt(page),
+        totalPages: Math.ceil(products.count / limit),
+        categories
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Kullanıcı istatistiklerini getir
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const getUserStats = async (req, res, next) => {
+  try {
+    // Son 6 ay için kullanıcı kaydı istatistikleri
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const userRegistrationsByMonth = await User.findAll({
+      attributes: [
+        [sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at')), 'month'],
+        [sequelize.fn('COUNT', sequelize.col('id')), 'count']
+      ],
+      where: {
+        createdAt: { [Op.gte]: sixMonthsAgo }
+      },
+      group: [sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at'))],
+      order: [[sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at')), 'ASC']]
+    });
+    
+    // En çok harcama yapan ilk 10 kullanıcı
+    const topSpenders = await User.findAll({
+      attributes: [
+        'id', 
+        'firstName', 
+        'lastName', 
+        'email',
+        [sequelize.fn('SUM', sequelize.col('Orders.total_amount')), 'totalSpent'],
+        [sequelize.fn('COUNT', sequelize.col('Orders.id')), 'orderCount']
+      ],
+      include: [{
+        model: Order,
+        attributes: [],
+        where: { status: 'completed' }
+      }],
+      group: ['User.id'],
+      order: [[sequelize.fn('SUM', sequelize.col('Orders.total_amount')), 'DESC']],
+      limit: 10
+    });
+    
+    // Active users (placed order in last 30 days)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    
+    const activeUsers = await User.count({
+      include: [{
+        model: Order,
+        where: {
+          createdAt: { [Op.gte]: thirtyDaysAgo }
+        },
+        required: true
+      }]
+    });
+    
+    // Toplam kullanıcı sayısı
+    const totalUsers = await User.count();
+    
+    // Adminlerin sayısı
+    const adminCount = await User.count({
+      where: { isAdmin: true }
+    });
+    
+    res.json({
+      status: 'success',
+      data: {
+        userRegistrationsByMonth,
+        topSpenders,
+        activeUsers,
+        totalUsers,
+        adminCount
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Bakiye istatistiklerini getir
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const getBalanceStats = async (req, res, next) => {
+  try {
+    // Toplam yüklenen bakiye
+    const totalDeposits = await Balance.sum('amount', {
+      where: { type: 'deposit' }
+    }) || 0;
+    
+    // Toplam harcanan bakiye
+    const totalWithdrawals = await Balance.sum('amount', {
+      where: { type: 'withdrawal' }
+    }) || 0;
+    
+    // Toplam iade edilen bakiye
+    const totalRefunds = await Balance.sum('amount', {
+      where: { type: 'refund' }
+    }) || 0;
+    
+    // Sistemdeki toplam bakiye
+    const totalSystemBalance = totalDeposits + totalWithdrawals + totalRefunds;
+    
+    // Son 6 ay için bakiye yükleme istatistikleri
+    const sixMonthsAgo = new Date();
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+    
+    const depositsByMonth = await Balance.findAll({
+      attributes: [
+        [sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at')), 'month'],
+        [sequelize.fn('SUM', sequelize.col('amount')), 'amount']
+      ],
+      where: {
+        type: 'deposit',
+        createdAt: { [Op.gte]: sixMonthsAgo }
+      },
+      group: [sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at'))],
+      order: [[sequelize.fn('DATE_TRUNC', 'month', sequelize.col('created_at')), 'ASC']]
+    });
+    
+    // En son 10 bakiye işlemi
+    const recentTransactions = await Balance.findAll({
+      include: [{
+        model: User,
+        attributes: ['firstName', 'lastName']
+      }],
+      order: [['createdAt', 'DESC']],
+      limit: 10
+    });
+    
+    res.json({
+      status: 'success',
+      data: {
+        totalDeposits,
+        totalWithdrawals,
+        totalRefunds,
+        totalSystemBalance,
+        depositsByMonth,
+        recentTransactions
+      }
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Sadakat programı istatistiklerini getir
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ * @param {Function} next - Express next middleware function
+ */
+const getLoyaltyStats = async (req, res, next) => {
+  try {
+    // Toplam kazanılan bedava kahve sayısı
+    const totalFreeCoffees = await Loyalty.sum('free_coffees');
+    
+    // Toplam kullanılan bedava kahve sayısı
+    const totalUsedCoffees = await Loyalty.sum('used_coffees');
+    
+    // Bedava kahve kullanımı olan siparişler
+    const freeCoffeeOrders = await Order.count({
+      where: { isFreeCoffee: true }
+    });
+    
+    // Toplam kahve sayacı
+    const totalCoffeeCount = await Loyalty.sum('coffee_count');
+    
+    // En sadık 10 müşteri
+    const loyalCustomers = await Loyalty.findAll({
+      attributes: [
+        'userId',
+        'coffeeCount',
+        'freeCoffees',
+        'usedCoffees'
+      ],
+      include: [{
+        model: User,
+        attributes: ['firstName', 'lastName', 'email']
+      }],
+      order: [['coffeeCount', 'DESC']],
+      limit: 10
+    });
+    
+    res.json({
+      status: 'success',
+      data: {
+        totalFreeCoffees: totalFreeCoffees || 0,
+        totalUsedCoffees: totalUsedCoffees || 0,
+        availableFreeCoffees: (totalFreeCoffees || 0) - (totalUsedCoffees || 0),
+        freeCoffeeOrders,
+        totalCoffeeCount: totalCoffeeCount || 0,
+        loyalCustomers
       }
     });
   } catch (error) {
@@ -507,5 +943,9 @@ module.exports = {
   updateOrderStatus,
   getSettings,
   updateSettings,
-  getDashboardStats
+  getDashboardStats,
+  getProductsWithStats,
+  getUserStats,
+  getBalanceStats,
+  getLoyaltyStats
 };

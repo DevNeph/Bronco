@@ -8,6 +8,8 @@ import EditProfileScreen from '../screens/profile/EditProfileScreen';
 import ChangePasswordScreen from '../screens/profile/ChangePasswordScreen';
 import BalanceScreen from '../screens/profile/BalanceScreen';
 import BalanceHistoryScreen from '../screens/profile/BalanceHistoryScreen';
+import AboutScreen from '../screens/profile/AboutScreen';
+import FAQScreen from '../screens/profile/FAQScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -43,6 +45,16 @@ const ProfileStack = () => {
         name="BalanceHistory" 
         component={BalanceHistoryScreen} 
         options={{ title: 'Bakiye Geçmişi' }} 
+      />
+      <Stack.Screen 
+        name="About" 
+        component={AboutScreen} 
+        options={{ title: 'Hakkında' }} 
+      />
+      <Stack.Screen 
+        name="FAQ" 
+        component={FAQScreen} 
+        options={{ title: 'Sıkça Sorulan Sorular' }} 
       />
     </Stack.Navigator>
   );

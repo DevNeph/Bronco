@@ -6,9 +6,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFormik } from 'formik';
 import * as Yup from 'yup';
-import { useDispatch, useSelector } from 'react-redux';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import AuthService from '../../services/authService';
+import { useDispatch } from 'react-redux';
+import { login } from '../../store/slices/authSlice'; // Import login action
 import { colors } from '../../utils/theme';
 
 const validationSchema = Yup.object().shape({
@@ -43,42 +42,20 @@ const LoginScreen = ({ navigation }) => {
         setIsLoading(true);
         setError(null);
         
-        // Directly use AuthService to avoid Redux complexity
-        const response = await AuthService.login(values.email, values.password);
-        console.log('Login API call successful!');
+        // Redux login action'ını dispatch et
+        await dispatch(login({ 
+          email: values.email, 
+          password: values.password
+        })).unwrap();
         
-        // Store user data in AsyncStorage
-        await AsyncStorage.setItem('user', JSON.stringify(response.data.data.user));
-        await AsyncStorage.setItem('tokens', JSON.stringify({
-          accessToken: response.data.data.accessToken,
-          refreshToken: response.data.data.refreshToken,
-        }));
-        
-        console.log('User data and tokens saved to AsyncStorage');
-        
-        // Şimdi Redux state'i güncelleyelim
-        // Alternatif olarak Redux yerine burada direct navigation yapıyoruz
-        // Burası çok önemli!
-        
-        // AppNavigator.js dosyanıza göre yönlendirilmesi gereken ekran "Main" değil
-        // Doğrudan parent navigator'ı kullanıyoruz
-        
-        // Root stack üzerinden, ana navigatoru kontrol eden component'a geri dönelim
-        const rootNavigation = navigation.getParent() || navigation;
-        
-        // Burada dispatch yerine doğrudan navigator'a yönlendirme yapıyoruz
-        // NOT: Uygulamanızın ilk açılışında isAuthenticated true olarak ayarlanacak
-        // ve otomatik olarak Main screen'e yönlendirilecektir
-        
-        // Bunu denemeden önce AppNavigator.js'deki kod çalışır
-        rootNavigation.navigate('Main');
+        console.log('Redux login action dispatched');
         
       } catch (err) {
         console.error('Login error:', err);
-        setError(err.response?.data?.message || 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.');
+        setError(err?.message || 'Giriş yapılamadı. Lütfen bilgilerinizi kontrol edin.');
         Alert.alert(
           'Giriş Hatası',
-          err.response?.data?.message || 'Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.'
+          err?.message || 'Sunucuya bağlanılamadı. Lütfen internet bağlantınızı kontrol edin.'
         );
       } finally {
         setIsLoading(false);

@@ -2,21 +2,9 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Platform } from 'react-native';
-import Constants from 'expo-constants';
 
-// Determine the base URL based on platform and environment
-let API_URL;
-
-if (Platform.OS === 'android') {
-  // For Android Emulator
-  API_URL = 'http://10.0.2.2:4000/api/v1';
-} else if (Platform.OS === 'ios') {
-  // For iOS in Expo Go, use the actual IP
-  API_URL = 'http://192.168.0.152:4000/api/v1';
-} else {
-  // For web
-  API_URL = 'http://localhost:4000/api/v1';
-}
+// Üretim ortamında canlı backend URL'si
+let API_URL = 'https://nephslair.net/api/v1';
 
 console.log(`Using API URL: ${API_URL} for platform: ${Platform.OS}`);
 
@@ -25,10 +13,10 @@ const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 15000, // 15 second timeout
+  timeout: 15000, // 15 saniye zaman aşımı
 });
 
-// Request interceptor for adding token
+// İstek interceptor'u: Her isteğe token ekler
 apiClient.interceptors.request.use(
   async (config) => {
     try {
@@ -53,7 +41,7 @@ apiClient.interceptors.request.use(
   }
 );
 
-// Response interceptor for refreshing token
+// Yanıt interceptor'u: Token yenileme işlemi yapar
 apiClient.interceptors.response.use(
   (response) => {
     console.log(`Response received from ${response.config.url} with status: ${response.status}`);
@@ -70,7 +58,7 @@ apiClient.interceptors.response.use(
     
     const originalRequest = error.config;
     
-    // If error is 401 and we haven't already tried to refresh
+    // 401 hatası alındıysa ve token yenilemeyi henüz denemediysek
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true;
       
@@ -80,7 +68,7 @@ apiClient.interceptors.response.use(
         if (tokensStr) {
           const tokens = JSON.parse(tokensStr);
           
-          // Try to refresh the token
+          // Token yenileme isteği
           const response = await axios.post(`${API_URL}/auth/refresh-token`, {
             refreshToken: tokens.refreshToken,
           });
@@ -90,22 +78,20 @@ apiClient.interceptors.response.use(
             refreshToken: response.data.data.refreshToken,
           };
           
-          // Save new tokens
+          // Yeni tokenları kaydet
           await AsyncStorage.setItem('tokens', JSON.stringify(newTokens));
           console.log('Token refreshed successfully');
           
-          // Retry with new token
+          // Yeniden deneme
           originalRequest.headers.Authorization = `Bearer ${newTokens.accessToken}`;
           return apiClient(originalRequest);
         }
       } catch (refreshError) {
         console.error('Token refresh failed:', refreshError.message);
         
-        // If refresh fails, logout user
+        // Yenileme başarısızsa kullanıcıyı çıkışa zorla
         await AsyncStorage.removeItem('user');
         await AsyncStorage.removeItem('tokens');
-        
-        // This will be handled by the app's navigation in practice
         console.log('Logged out due to authentication failure');
       }
     }

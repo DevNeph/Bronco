@@ -2,6 +2,8 @@
 import { createSlice, createAsyncThunk } from '@reduxjs/toolkit';
 import AuthService from '../../services/authService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import apiClient from '../../services/apiClient';
+import UserService from '../../services/userService';
 
 // Async thunks
 export const login = createAsyncThunk(
@@ -9,6 +11,11 @@ export const login = createAsyncThunk(
   async ({ email, password }, { rejectWithValue }) => {
     try {
       console.log('Login attempt started in Redux:', email);
+      
+      // Email ve password parametrelerinin varlığını kontrol et
+      if (!email || !password) {
+        throw new Error('Email and password are required');
+      }
       
       const response = await AuthService.login(email, password);
       console.log('Login API call succeeded in Redux');
@@ -92,6 +99,50 @@ export const loadUser = createAsyncThunk(
   }
 );
 
+export const updateProfile = createAsyncThunk(
+  'auth/updateProfile',
+  async ({ firstName, lastName, phone }, { getState, rejectWithValue }) => {
+    try {
+      // API çağrısı
+      const response = await apiClient.put('/users/me', {
+        firstName,
+        lastName,
+        phone
+      });
+      
+      // AsyncStorage'daki kullanıcı bilgilerini güncelle
+      const userStr = await AsyncStorage.getItem('user');
+      if (userStr) {
+        const user = JSON.parse(userStr);
+        const updatedUser = {
+          ...user,
+          firstName,
+          lastName,
+          phone
+        };
+        await AsyncStorage.setItem('user', JSON.stringify(updatedUser));
+      }
+      
+      return response.data.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Profil güncellenemedi');
+    }
+  }
+);
+
+export const changePassword = createAsyncThunk(
+  'auth/changePassword',
+  async ({ currentPassword, newPassword }, { rejectWithValue }) => {
+    try {
+      // API çağrısı 
+      const response = await UserService.changePassword(currentPassword, newPassword);
+      return response.data;
+    } catch (error) {
+      return rejectWithValue(error.response?.data?.message || 'Şifre değiştirilemedi');
+    }
+  }
+);
+
 const initialState = {
   user: null,
   tokens: null,
@@ -168,6 +219,32 @@ const authSlice = createSlice({
         }
       })
       .addCase(loadUser.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(updateProfile.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(updateProfile.fulfilled, (state, action) => {
+        state.isLoading = false;
+        state.user = {
+          ...state.user,
+          ...action.payload
+        };
+      })
+      .addCase(updateProfile.rejected, (state, action) => {
+        state.isLoading = false;
+        state.error = action.payload;
+      })
+      .addCase(changePassword.pending, (state) => {
+        state.isLoading = true;
+        state.error = null;
+      })
+      .addCase(changePassword.fulfilled, (state, action) => {
+        state.isLoading = false;
+      })
+      .addCase(changePassword.rejected, (state, action) => {
         state.isLoading = false;
         state.error = action.payload;
       });

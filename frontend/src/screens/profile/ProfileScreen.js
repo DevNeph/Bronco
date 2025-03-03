@@ -105,13 +105,6 @@ const ProfileScreen = ({ navigation }) => {
             
             <List.Subheader style={styles.menuHeader}>Uygulama</List.Subheader>
             
-            <List.Item
-              title="Hakkında"
-              left={props => <List.Icon {...props} icon="information" />}
-              right={props => <List.Icon {...props} icon="chevron-right" />}
-              onPress={() => navigation.navigate('About')}
-              style={styles.menuItem}
-            />
             
             <Divider />
             
@@ -120,6 +113,14 @@ const ProfileScreen = ({ navigation }) => {
               left={props => <List.Icon {...props} icon="help-circle" />}
               right={props => <List.Icon {...props} icon="chevron-right" />}
               onPress={() => navigation.navigate('FAQ')}
+              style={styles.menuItem}
+            />
+
+            <List.Item
+              title="Hakkında"
+              left={props => <List.Icon {...props} icon="information" />}
+              right={props => <List.Icon {...props} icon="chevron-right" />}
+              onPress={() => navigation.navigate('About')}
               style={styles.menuItem}
             />
             

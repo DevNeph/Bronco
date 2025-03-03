@@ -184,14 +184,18 @@ const getBalanceHistory = async (req, res, next) => {
     const { limit = 10, page = 1 } = req.query;
     
     // Calculate offset
-    const offset = (page - 1) * limit;
+    const offset = (page - 1) * parseInt(limit);
     
     // Get balance history
     const balanceHistory = await Balance.findAndCountAll({
       where: { userId },
-      order: [['createdAt', 'DESC']],
+      attributes: [
+        'id', 'userId', 'amount', 'type', 'referenceId', 'balanceAfter', 'description',
+        ['created_at', 'createdAt'] // created_at sütununu createdAt olarak map edin
+      ],
+      order: [['created_at', 'DESC']], // Sıralama için de snake_case kullanın
       limit: parseInt(limit),
-      offset: parseInt(offset)
+      offset: offset
     });
     
     res.json({
@@ -200,10 +204,11 @@ const getBalanceHistory = async (req, res, next) => {
         transactions: balanceHistory.rows,
         totalCount: balanceHistory.count,
         currentPage: parseInt(page),
-        totalPages: Math.ceil(balanceHistory.count / limit)
+        totalPages: Math.ceil(balanceHistory.count / parseInt(limit))
       }
     });
   } catch (error) {
+    console.error("Balance history error:", error);
     next(error);
   }
 };

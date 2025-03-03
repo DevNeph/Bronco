@@ -23,4 +23,9 @@ router.put('/settings', adminController.updateSettings);
 // Dashboard statistics
 router.get('/stats', adminController.getDashboardStats);
 
+// Web Admin CLient
+router.get('/dashboard/stats', adminController.getDashboardStats);
+router.get('/products/stats', adminController.getProductsWithStats);
+router.get('/users/stats', adminController.getUserStats);
+
 module.exports = router;
