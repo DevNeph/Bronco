@@ -1,6 +1,15 @@
 require('dotenv').config();
 const { Sequelize } = require('sequelize');
 
+const dialectOptions = process.env.NODE_ENV === 'production'
+  ? {
+      ssl: {
+        require: true,
+        rejectUnauthorized: false
+      }
+    }
+  : {};
+
 const sequelize = new Sequelize(
   process.env.DB_NAME,
   process.env.DB_USER,
@@ -10,12 +19,7 @@ const sequelize = new Sequelize(
     port: process.env.DB_PORT,
     dialect: 'postgres',
     logging: process.env.NODE_ENV === 'development' ? console.log : false,
-    dialectOptions: {
-      ssl: {
-        require: true,
-        rejectUnauthorized: false
-      }
-    },
+    dialectOptions, // Use the conditional configuration
     pool: {
       max: 5,
       min: 0,
